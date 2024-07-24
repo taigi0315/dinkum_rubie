@@ -7,10 +7,18 @@ import cv2
 import numpy as np
 from mss import mss
 from PIL import Image, ImageGrab
+import simpleaudio as sa
 import time
-    
-WINDOW_BOX = (0, 0, 1920, 1080)
+import pyautogui
 
+
+play_obj = None
+wave_obj = sa.WaveObject.from_wave_file("assets/cash.wav")
+detector_on = True
+# Get the screen resolution
+screen_width, screen_height = pyautogui.size()
+WINDOW_BOX = (0, 0, screen_width, screen_height)
+print(f"Window size:", WINDOW_BOX)
 
 def convert_HSV(h, s, v):
     """
@@ -22,9 +30,23 @@ def convert_HSV(h, s, v):
 
     return converted_hsv
 
-def run_rubie_detect(light_red_range, dark_red_range):
+def run_rubie_detect(light_red_range, dark_red_range, threshold=15000):
+    global detector_on
     with mss() as sct:
         while True:
+            # Break 
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+            # Toggle detector
+            if cv2.waitKey(1) & 0xFF == ord('t'):
+                detector_on = not detector_on
+                print("Detector toggled to", detector_on)
+
+            if not detector_on:
+                cv2.imshow("mask_screen", np.zeros((540, 960, 3), np.uint8))
+                time.sleep(3)
+                continue
+            
             # ImageGrab return RGB
             image = ImageGrab.grab(bbox=WINDOW_BOX)
             # Convert RGB -> BGR (opencv default)
@@ -43,13 +65,16 @@ def run_rubie_detect(light_red_range, dark_red_range):
             # resize the screen
             result = cv2.resize(result, (960, 540))
             cv2.imshow("mask_screen", result)
-            # stop
-            if cv2.waitKey(33) & 0xFF in (
-                    ord('q'), 
-                    27, 
-                ):
-                    break
-    cv2.destroyAllWindows()
+            
+            ruby_detect = np.sum(result)
+            # Check if ruby is detected
+            print(f"Ruby..{ruby_detect}")
+            if detector_on and ruby_detect > threshold:
+                # Play sound
+                play_obj = wave_obj.play()
+                time.sleep(10000/ruby_detect)  # Wait for 1 second
+            
+
 
 def generate_mask(screen, range):
     """
@@ -77,5 +102,5 @@ if __name__ == "__main__":
     print_mask_range(light_red_range)
     print_mask_range(dark_red_range)
 
-    run_rubie_detect(light_red_range, dark_red_range)
+    run_rubie_detect(light_red_range=light_red_range, dark_red_range=dark_red_range, threshold=10000)
     
